@@ -1,4 +1,4 @@
-const MAX_PLAYERS = 2;
+const MAX_PLAYERS = 4;
 const MAX_LAPS = 3; // Configure number of laps here
 
 const SPAWN_POINTS = [
