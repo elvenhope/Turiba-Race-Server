@@ -1,18 +1,5 @@
-/**
- * room.js
- *
- * Changes vs original:
- *  - NPC_COUNT / REAL_MAX_PLAYERS constants
- *  - createRoom() no longer pre-fills NPCs — NPCs are injected on demand
- *    via fillWithNPCs() so a normal 4-player room still works without NPCs
- *  - fillWithNPCs() injects NPC players into remaining slots and returns the room
- *  - updateLap / completeLap accept optional npcId so host can act for NPCs
- *  - removePlayer ignores npc_ IDs
- */
-
 const MAX_PLAYERS      = 4;
-const NPC_COUNT        = MAX_PLAYERS - 2; // max NPCs = slots that could go unfilled
-const REAL_MAX_PLAYERS = MAX_PLAYERS;     // a full human room still needs 4
+const REAL_MAX_PLAYERS = MAX_PLAYERS;
 
 const SPAWN_POINTS = [
     { x: 1423, y: 244 },
@@ -22,14 +9,26 @@ const SPAWN_POINTS = [
     { x: 1200, y: 244 },
 ];
 
-// Must match the character `name` strings in CharScene exactly,
-// because clients use  name + "_car"  as the texture key.
-const NPC_CHARACTERS = [
+// Full character roster — matches CharScene exactly
+const ALL_CHARACTERS = [
     "TOURISM AND HOSPITALITY",
-    "LAW SCIENCE",
     "INFORMATION TECHNOLOGIES",
+    "LAW SCIENCE",
     "BUSINESS ADMINISTRATION",
+    "COMMUNICATION SCIENCE",
+    "HEALTHCARE",
+    "ORGANIZATION MANAGEMENT",
 ];
+
+// Fisher-Yates shuffle — returns a new shuffled array, doesn't mutate original
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
 
 let rooms = [];
 
@@ -46,11 +45,6 @@ function createRoom() {
     return newRoom;
 }
 
-/**
- * Fill remaining slots with NPC players.
- * Called by the server when the host clicks "RACE" (startWithNPCs event).
- * Returns the room so the caller can broadcast startRace.
- */
 function fillWithNPCs(roomId) {
     const room = rooms.find(r => r.id === roomId);
     if (!room || room.raceStarted) return null;
@@ -58,9 +52,9 @@ function fillWithNPCs(roomId) {
     const realPlayers = room.players.filter(p => !p.isNPC);
     const slotsNeeded = MAX_PLAYERS - realPlayers.length;
 
-    // Pick NPC characters that aren't already chosen by real players
+    // Exclude characters already chosen by real players, then shuffle what's left
     const takenNames = new Set(realPlayers.map(p => p.name));
-    const available  = NPC_CHARACTERS.filter(n => !takenNames.has(n));
+    const available  = shuffle(ALL_CHARACTERS.filter(n => !takenNames.has(n)));
 
     for (let i = 0; i < slotsNeeded; i++) {
         const spawnIndex = realPlayers.length + i;
@@ -86,7 +80,6 @@ function fillWithNPCs(roomId) {
 }
 
 function joinAvailableRoom(socketId, playerData) {
-    // Find a room with space that hasn't started and has no NPCs yet
     let room = rooms.find(r =>
         r.players.filter(p => !p.isNPC).length < REAL_MAX_PLAYERS && !r.raceStarted
     );
@@ -171,7 +164,6 @@ function removePlayer(socketId) {
         const index = room.players.findIndex(p => p.id === socketId);
         if (index !== -1) {
             room.players.splice(index, 1);
-            // If no real players remain, destroy the room
             if (room.players.filter(p => !p.isNPC).length === 0) {
                 rooms = rooms.filter(r => r.id !== room.id);
             }
